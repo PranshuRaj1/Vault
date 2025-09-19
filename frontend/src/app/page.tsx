@@ -1,103 +1,199 @@
-import Image from "next/image";
+"use client"
 
-export default function Home() {
+import * as React from "react"
+import { MainLayout } from "@/components/layout/main-layout"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Files, Upload, HardDrive, TrendingUp, Share2, Shield } from "lucide-react"
+
+/**
+ * Mock user data for demonstration
+ * In a real application, this would come from authentication context
+ */
+const mockUser = {
+  name: "John Doe",
+  email: "john.doe@example.com",
+  avatar: "/diverse-user-avatars.png",
+  role: "admin" as const,
+}
+
+/**
+ * Mock dashboard statistics
+ * In a real application, this would be fetched from the Go backend API
+ */
+const dashboardStats = {
+  totalFiles: 1247,
+  totalStorage: "8.4 GB",
+  savedStorage: "2.1 GB",
+  savingsPercentage: 25,
+  publicFiles: 89,
+  privateFiles: 1158,
+  recentUploads: 23,
+}
+
+/**
+ * Dashboard page component
+ * Provides overview of file vault statistics and quick actions
+ * Responsive grid layout with informative cards
+ */
+export default function DashboardPage() {
+  /**
+   * Memoized quick action handlers to prevent unnecessary re-renders
+   */
+  const quickActions = React.useMemo(
+    () => ({
+      uploadFiles: () => {
+        // TODO: Navigate to upload page or open upload modal
+        console.log("Navigating to upload...")
+      },
+      viewFiles: () => {
+        // TODO: Navigate to files page
+        console.log("Navigating to files...")
+      },
+      viewStats: () => {
+        // TODO: Navigate to statistics page
+        console.log("Navigating to statistics...")
+      },
+      adminPanel: () => {
+        // TODO: Navigate to admin panel
+        console.log("Navigating to admin panel...")
+      },
+    }),
+    [],
+  )
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <MainLayout user={mockUser} notificationCount={3}>
+      <div className="space-y-6">
+        {/* Welcome section */}
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {mockUser.name}</h1>
+          <p className="text-muted-foreground">Here's an overview of your file vault activity and storage usage.</p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+
+        {/* Statistics grid */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {/* Total Files Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Files</CardTitle>
+              <Files className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{dashboardStats.totalFiles.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">
+                <span className="text-green-600">+{dashboardStats.recentUploads}</span> from last week
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Storage Usage Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
+              <HardDrive className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{dashboardStats.totalStorage}</div>
+              <p className="text-xs text-muted-foreground">
+                <span className="text-blue-600">{dashboardStats.savedStorage} saved</span> via deduplication
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Storage Savings Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Storage Savings</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{dashboardStats.savingsPercentage}%</div>
+              <p className="text-xs text-muted-foreground">Efficiency through deduplication</p>
+            </CardContent>
+          </Card>
+
+          {/* File Sharing Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Shared Files</CardTitle>
+              <Share2 className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{dashboardStats.publicFiles}</div>
+              <p className="text-xs text-muted-foreground">{dashboardStats.privateFiles} private files</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Card className="cursor-pointer transition-colors hover:bg-muted/50" onClick={quickActions.uploadFiles}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                Upload Files
+              </CardTitle>
+              <CardDescription>Upload single or multiple files with drag & drop support</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full">Start Upload</Button>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer transition-colors hover:bg-muted/50" onClick={quickActions.viewFiles}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Files className="h-5 w-5" />
+                Manage Files
+              </CardTitle>
+              <CardDescription>View, organize, and manage your uploaded files</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" className="w-full bg-transparent">
+                View Files
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer transition-colors hover:bg-muted/50" onClick={quickActions.viewStats}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <HardDrive className="h-5 w-5" />
+                Storage Analytics
+              </CardTitle>
+              <CardDescription>Detailed storage usage and deduplication statistics</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" className="w-full bg-transparent">
+                View Statistics
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Admin Quick Access (only for admin users) */}
+        {mockUser.role === "admin" && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Administrator Panel
+                <Badge variant="outline" className="ml-auto">
+                  Admin
+                </Badge>
+              </CardTitle>
+              <CardDescription>Access system administration, user management, and advanced analytics</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={quickActions.adminPanel} className="w-full md:w-auto">
+                Open Admin Panel
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </MainLayout>
+  )
 }
