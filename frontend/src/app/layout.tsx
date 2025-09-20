@@ -3,11 +3,12 @@ import type { Metadata } from "next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Suspense } from "react"
 import "./globals.css"
+import { AuthProvider } from "@/context/AuthContext"
 
 export const metadata: Metadata = {
   title: "SecureVault - File Management System",
   description: "Secure file vault with deduplication, sharing, and advanced search capabilities",
-  generator: "v0.app",
+  generator: "Pranshu Raj",
 }
 
 export default function RootLayout({
@@ -20,7 +21,7 @@ export default function RootLayout({
       <body className={`font-sans `}>
         <Suspense fallback={null}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-            {children}
+            <AuthProvider>{children}</AuthProvider>
           </ThemeProvider>
         </Suspense>
     

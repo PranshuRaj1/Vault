@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log" // <-- Import the log package
 	"net/http"
+	"time"
 
 	"balkan/auth"
 	"balkan/models"
@@ -63,8 +64,37 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		utils.WriteJSON(w, http.StatusInternalServerError, utils.ErrorResponse("Failed to create user"))
 		return
 	}
+	// 1. Create a JWT for the new user
+	token, err := auth.CreateJWT(user.ID, user.Role)
+	if err != nil {
+		// Log the internal error, but send a generic success message
+		// The user was created, but login failed.
+		log.Printf("ERROR: Failed to create token for new user %s: %v", user.Email, err)
+		// We can still return success, but they will have to log in manually
+		utils.WriteJSON(w, http.StatusCreated, map[string]string{"message": "User registered, but auto-login failed. Please log in."})
+		return
+	}
 
-	utils.WriteJSON(w, http.StatusCreated, map[string]string{"message": "User registered successfully"})
+	// 2. Set the httpOnly cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    token,
+		Expires:  time.Now().Add(24 * time.Hour),
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// 3. Send back a success response
+	utils.WriteJSON(w, http.StatusCreated, map[string]string{
+		"message":  "User registered successfully",
+		"username": user.Username,
+		"email":    user.Email,
+		"userID":   user.ID,
+		"userRole": user.Role,
+	})
+
 }
 
 // Login handles user login.
@@ -100,5 +130,31 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    token,
+		Expires:  time.Now().Add(24 * time.Hour), // 24-hour expiry
+		HttpOnly: true,                           // Prevents JS access
+		Secure:   r.TLS != nil,                   // True in production (HTTPS)
+		Path:     "/",                            // Available to entire site
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	utils.WriteJSON(w, http.StatusOK, map[string]string{"token": token})
+}
+
+// Logout handles user logout by clearing the cookie.
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	// Set a cookie with the same name, but with an expiry time in the past
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour), // An hour in the past
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }

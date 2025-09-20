@@ -1,13 +1,11 @@
 package auth
 
 import (
+	"balkan/utils"
 	"context"
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
-
-	"balkan/utils" // Using your existing JSON writer
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -18,27 +16,30 @@ type contextKey string
 const UserIDKey = contextKey("userID")
 const UserRoleKey = contextKey("userRole")
 
-// AuthMiddleware is a chi-compatible middleware for JWT authentication.
+// AuthMiddleware is a chi-compatible middleware for JWT authentication
+// Reads the token from an httpOnly cookie.
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 1. Get the Authorization header
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			utils.WriteJSON(w, http.StatusUnauthorized, utils.ErrorResponse("Authorization header is required"))
+
+		// 1. Get the cookie from the request
+		cookie, err := r.Cookie("auth_token") //Read cookie
+		if err != nil {
+			if err == http.ErrNoCookie {
+				// If the cookie is not set, return an unauthorized status
+				utils.WriteJSON(w, http.StatusUnauthorized, utils.ErrorResponse("Unauthorized: No session cookie provided"))
+				return
+			}
+			// For any other error, return a bad request status
+			utils.WriteJSON(w, http.StatusBadRequest, utils.ErrorResponse("Bad request"))
 			return
 		}
 
-		// 2. Validate the header format (Bearer <token>)
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		if tokenString == authHeader {
-			utils.WriteJSON(w, http.StatusUnauthorized, utils.ErrorResponse("Invalid token format. Must be Bearer <token>"))
-			return
-		}
+		// 2. Get the token string from the cookie
+		tokenString := cookie.Value
 
 		// 3. Get the JWT secret
 		jwtSecret := os.Getenv("JWT_SECRET")
 		if jwtSecret == "" {
-			// This is a server error, not a client one.
 			utils.WriteJSON(w, http.StatusInternalServerError, utils.ErrorResponse("Server configuration error"))
 			return
 		}

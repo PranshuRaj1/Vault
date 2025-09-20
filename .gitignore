@@ -1,6 +1,5 @@
 .env
 node_modules
 next
-frontend
 tmp
 uploads
