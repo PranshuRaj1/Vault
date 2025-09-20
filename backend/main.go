@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"balkan/auth"
 	"balkan/handlers"
 	"balkan/store"
 
@@ -19,7 +20,7 @@ import (
 )
 
 func main() {
-	// Load .env file. In production, these should be actual environment variables.
+	// Load .env file.
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using system environment variables.")
 	}
@@ -42,7 +43,6 @@ func main() {
 	fmt.Println("Successfully connected to Neon database!")
 
 	// --- Dependency Injection ---
-	// Create instances of our dependencies (store, auth, handlers)
 	userStore := store.NewUserStore(db)
 	authHandler := handlers.NewAuthHandler(userStore)
 
@@ -52,25 +52,47 @@ func main() {
 	// --- Middleware ---
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)    // Log requests to the console
-	r.Use(middleware.Recoverer) // Recover from panics without crashing
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	// Basic CORS middleware. In production, you would restrict this
-	// to your actual frontend domain.
+	// CORS middleware configuration
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://*", "https://*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
-		MaxAge:           300, // Maximum value not ignored by any browser
+		MaxAge:           300,
 	}))
 
 	// --- API Routes ---
 	r.Route("/api", func(r chi.Router) {
+		// --- Public Routes (No Auth Required) ---
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
+
+		// --- Protected Routes (Auth Required) ---
+		r.Group(func(r chi.Router) {
+			// Apply the AuthMiddleware to this entire group of routes
+			r.Use(auth.AuthMiddleware)
+
+			// Example protected route to get current user's info
+			r.Get("/me", func(w http.ResponseWriter, r *http.Request) {
+				// We can safely retrieve user info from the context
+				// because the middleware has already validated the token.
+				userID := r.Context().Value(auth.UserIDKey).(string)
+				userRole := r.Context().Value(auth.UserRoleKey).(string)
+
+				// Respond with the user's info
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintf(w, `{"message": "This is a protected route", "userID": "%s", "userRole": "%s"}`, userID, userRole)
+			})
+
+			// You would add other protected file-related routes here, for example:
+			// r.Post("/files", fileHandler.Upload)
+			// r.Get("/files", fileHandler.List)
+		})
 	})
 
 	// A simple health check endpoint
