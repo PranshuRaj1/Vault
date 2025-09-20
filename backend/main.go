@@ -44,7 +44,9 @@ func main() {
 
 	// --- Dependency Injection ---
 	userStore := store.NewUserStore(db)
+	fileStore := store.NewFileStore(db) // New dependency for file operations
 	authHandler := handlers.NewAuthHandler(userStore)
+	fileHandler := handlers.NewFileHandler(userStore, fileStore) // New handler for files
 
 	// --- Router Setup ---
 	r := chi.NewRouter()
@@ -77,21 +79,16 @@ func main() {
 			// Apply the AuthMiddleware to this entire group of routes
 			r.Use(auth.AuthMiddleware)
 
-			// Example protected route to get current user's info
+			// Route for user info
 			r.Get("/me", func(w http.ResponseWriter, r *http.Request) {
-				// We can safely retrieve user info from the context
-				// because the middleware has already validated the token.
 				userID := r.Context().Value(auth.UserIDKey).(string)
 				userRole := r.Context().Value(auth.UserRoleKey).(string)
-
-				// Respond with the user's info
 				w.Header().Set("Content-Type", "application/json")
 				fmt.Fprintf(w, `{"message": "This is a protected route", "userID": "%s", "userRole": "%s"}`, userID, userRole)
 			})
 
-			// You would add other protected file-related routes here, for example:
-			// r.Post("/files", fileHandler.Upload)
-			// r.Get("/files", fileHandler.List)
+			// Route for handling file uploads
+			r.Post("/files", fileHandler.UploadFiles)
 		})
 	})
 
