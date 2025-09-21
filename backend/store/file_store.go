@@ -11,6 +11,8 @@ import (
 type FileStore interface {
 	// ProcessUpload handles the database transaction for a file upload.
 	ProcessUpload(ctx context.Context, logicalFile *models.LogicalFile, physicalFile *models.PhysicalFile) (*models.LogicalFile, bool, error)
+	GetFileCountByUserID(userID string) (int64, error)
+	GetStorageUsageByUserID(userID string) (int64, error)
 }
 
 // DBFileStore is a concrete implementation of FileStore.
@@ -96,4 +98,29 @@ func (s *DBFileStore) ProcessUpload(ctx context.Context, logicalFile *models.Log
 	}
 
 	return logicalFile, isDuplicate, nil
+}
+
+func (s *DBFileStore) GetFileCountByUserID(userID string) (int64, error) {
+	var count int64
+	query := `SELECT COUNT(*) 
+              FROM logical_files 
+              WHERE owner_id = $1`
+
+	err := s.db.QueryRow(query, userID).Scan(&count)
+	return count, err
+}
+
+// GetStorageUsageByUserID calculates the total storage used by a user's files.
+// This sums the size of all physical files linked to the user's logical files.
+// Add this to your FileStore implementation (e.g., in file_store.go)
+func (s *DBFileStore) GetStorageUsageByUserID(userID string) (int64, error) {
+	var totalStorage int64
+	// COALESCE ensures we return 0 instead of NULL if the user has no files
+	query := `SELECT COALESCE(SUM(pf.size), 0)
+              FROM logical_files lf
+              JOIN physical_files pf ON lf.physical_file_id = pf.id
+              WHERE lf.owner_id = $1`
+
+	err := s.db.QueryRow(query, userID).Scan(&totalStorage)
+	return totalStorage, err
 }

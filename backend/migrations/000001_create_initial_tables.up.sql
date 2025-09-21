@@ -24,6 +24,7 @@ CREATE TABLE users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role user_role NOT NULL DEFAULT 'user',
+  storage_quota BIGINT DEFAULT 0
   storage_quota BIGINT NOT NULL DEFAULT 10485760, -- 10 MB default 
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

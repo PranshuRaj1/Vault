@@ -11,6 +11,7 @@ import (
 type UserStore interface {
 	CreateUser(user *models.User) error
 	GetUserByEmail(email string) (*models.User, error)
+	GetUserByID(id string) (*models.User, error)
 }
 
 // DBUserStore is a concrete implementation of UserStore using a SQL database.
@@ -52,6 +53,29 @@ func (s *DBUserStore) GetUserByEmail(email string) (*models.User, error) {
 			return nil, fmt.Errorf("user not found")
 		}
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
+	}
+	return user, nil
+}
+
+func (s *DBUserStore) GetUserByID(id string) (*models.User, error) {
+	user := &models.User{}
+
+	// Selects only the fields needed for the dashboard, excluding the password hash
+	query := `SELECT id, username, email, role, storage_quota 
+              FROM users 
+              WHERE id = $1`
+
+	// Assumes your models.User struct can be scanned in this order
+	err := s.db.QueryRow(query, id).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.Role,
+		&user.StorageQuota,
+	)
+
+	if err != nil {
+		return nil, err
 	}
 	return user, nil
 }

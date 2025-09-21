@@ -47,6 +47,7 @@ func main() {
 	fileStore := store.NewFileStore(db) // New dependency for file operations
 	authHandler := handlers.NewAuthHandler(userStore)
 	fileHandler := handlers.NewFileHandler(userStore, fileStore) // New handler for files
+	dashboardHandler := handlers.NewDashboardHandler(userStore, fileStore)
 
 	// --- Router Setup ---
 	r := chi.NewRouter()
@@ -92,6 +93,9 @@ func main() {
 
 			// log out route
 			r.Post("/logout", authHandler.Logout)
+
+			// file data
+			r.Get("/dashboard-stats", dashboardHandler.GetDashboardStats)
 		})
 	})
 
