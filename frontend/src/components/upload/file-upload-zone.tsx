@@ -251,7 +251,6 @@ export function FileUploadZone({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={openFilePicker}
         className={cn(
           "relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
           "hover:border-primary/50 hover:bg-muted/25",
