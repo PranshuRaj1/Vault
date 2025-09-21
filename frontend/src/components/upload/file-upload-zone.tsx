@@ -221,7 +221,7 @@ export function FileUploadZone({
                   )}
                   {file.status === "completed" && (
                     <div className="mt-2">
-                      <Progress value={100} className="h-1" typeof="success" />
+                      <Progress value={100} className="h-1" variant="success" />
                       <p className="text-xs text-green-600 mt-1">Completed</p>
                     </div>
                   )}
