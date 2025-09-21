@@ -119,7 +119,7 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
       if (!file || file.status === "uploading") return
 
       try {
-        // --- FIX 1 ---
+  
         // Update status to uploading
         setFiles((prev) =>
           prev.map((f) =>
@@ -143,7 +143,7 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
           throw new Error(data.error || "Upload failed")
         }
 
-        // --- FIX 2 ---
+ 
         // Mark as completed
         setFiles((prev) =>
           prev.map((f) =>
@@ -151,7 +151,7 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
           ),
         )
       } catch (error) {
-        // --- FIX 3 ---
+     
         // Mark as error
         const errorMsg = error instanceof Error ? error.message : "Upload failed"
         setFiles((prev) =>
@@ -196,7 +196,7 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
     setIsUploading(true)
     uploadQueueRef.current = files.filter((f) => f.status === "pending" || f.status === "error").map((f) => f.id)
 
-    // --- FIX 4 ---
+
     // Reset error files to pending
     setFiles((prev) =>
       prev.map((f) =>
@@ -217,7 +217,6 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
     uploadQueueRef.current = []
     activeUploadsRef.current.clear()
 
-    // --- FIX 5 ---
     // Reset uploading files to pending
     setFiles((prev) =>
       prev.map((f) =>

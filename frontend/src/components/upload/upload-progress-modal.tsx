@@ -73,7 +73,7 @@ export function UploadProgressModal({
               <Progress
                 value={file.progress}
                 className="flex-1 h-1"
-                variant={file.status === "completed" ? "success" : "default"}
+                typeof = {file.status === "completed" ? "success" : "default"}
               />
               <span className="text-xs text-muted-foreground">{file.progress}%</span>
             </div>
@@ -109,7 +109,7 @@ export function UploadProgressModal({
             <Progress
               value={overallProgress}
               className="h-2"
-              variant={isComplete && errorCount === 0 ? "success" : "default"}
+              typeof={isComplete && errorCount === 0 ? "success" : "default"}
             />
           </div>
 
