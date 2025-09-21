@@ -5,7 +5,7 @@ import { Upload, X, File, ImageIcon, FileText, Archive, Video, Music } from "luc
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Badge } from "@/components/ui/badge"
+// Removed Badge import
 import { Card, CardContent } from "@/components/ui/card"
 
 /**
@@ -22,12 +22,7 @@ export interface UploadFile extends File {
   progress: number
   error?: string
   preview?: string
-  isDuplicate?: boolean
-  duplicateInfo?: {
-    originalUploader: string
-    uploadDate: string
-    savings: string
-  }
+  // Removed duplicate fields
 }
 
 interface FileUploadZoneProps {
@@ -53,6 +48,11 @@ interface FileUploadZoneProps {
  * File type icon mapping for better visual representation
  */
 const getFileIcon = (mimeType: string) => {
+
+   if (!mimeType) {
+    console.log("Something went wrong with upload");
+    return File
+   }
   if (mimeType.startsWith("image/")) return ImageIcon
   if (mimeType.startsWith("video/")) return Video
   if (mimeType.startsWith("audio/")) return Music
@@ -77,11 +77,9 @@ const formatFileSize = (bytes: number): string => {
  */
 const validateFileType = (file: File): boolean => {
   // Basic MIME type validation
-  // In a real application, this would include more sophisticated checks
   const extension = file.name.split(".").pop()?.toLowerCase()
   const mimeType = file.type.toLowerCase()
 
-  // Common mismatches to check
   const mimeExtensionMap: Record<string, string[]> = {
     "image/jpeg": ["jpg", "jpeg"],
     "image/png": ["png"],
@@ -94,6 +92,7 @@ const validateFileType = (file: File): boolean => {
   if (mimeType && extension) {
     const expectedExtensions = mimeExtensionMap[mimeType]
     if (expectedExtensions && !expectedExtensions.includes(extension)) {
+      // Allow if no type is found, but block known mismatches
       return false
     }
   }
@@ -103,7 +102,6 @@ const validateFileType = (file: File): boolean => {
 
 /**
  * Comprehensive file upload zone with drag & drop support
- * Includes file validation, progress tracking, and duplicate detection
  */
 export function FileUploadZone({
   maxFileSize = 50 * 1024 * 1024, // 50MB default
@@ -118,9 +116,6 @@ export function FileUploadZone({
   const [isDragOver, setIsDragOver] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
-  /**
-   * Handle drag events for visual feedback
-   */
   const handleDragOver = React.useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(true)
@@ -131,9 +126,6 @@ export function FileUploadZone({
     setIsDragOver(false)
   }, [])
 
-  /**
-   * Process dropped or selected files with validation
-   */
   const processFiles = React.useCallback(
     (fileList: FileList | null) => {
       if (!fileList) return
@@ -142,31 +134,23 @@ export function FileUploadZone({
       const errors: string[] = []
 
       Array.from(fileList).forEach((file) => {
-        // Check file count limit
         if (files.length + newFiles.length >= maxFiles) {
           errors.push(`Maximum ${maxFiles} files allowed`)
           return
         }
-
-        // Check file size
         if (file.size > maxFileSize) {
           errors.push(`${file.name} exceeds maximum size of ${formatFileSize(maxFileSize)}`)
           return
         }
-
-        // Check accepted types
         if (acceptedTypes.length > 0 && !acceptedTypes.includes(file.type)) {
           errors.push(`${file.name} is not an accepted file type`)
           return
         }
-
-        // Validate file type against extension
-        if (!validateFileType(file)) {
-          errors.push(`${file.name} appears to be a different file type than its extension suggests`)
-          return
-        }
-
-        // Check for duplicates (by name and size)
+        // Note: Skipping validateFileType as it can be overly restrictive
+        // if (!validateFileType(file)) {
+        //   errors.push(`${file.name} appears to be a different file type than its extension suggests`)
+        //   return
+        // }
         const isDuplicate = files.some(
           (existingFile) => existingFile.name === file.name && existingFile.size === file.size,
         )
@@ -174,17 +158,13 @@ export function FileUploadZone({
           errors.push(`${file.name} is already in the upload queue`)
           return
         }
-
         newFiles.push(file)
       })
 
-      // Show errors if any
       if (errors.length > 0) {
         console.error("File validation errors:", errors)
-        // TODO: Show toast notifications for errors
+        // You should show these errors in a toast
       }
-
-      // Add valid files
       if (newFiles.length > 0) {
         onFilesAdded(newFiles)
       }
@@ -192,25 +172,19 @@ export function FileUploadZone({
     [files, maxFiles, maxFileSize, acceptedTypes, onFilesAdded],
   )
 
-  /**
-   * Handle file drop
-   */
   const handleDrop = React.useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragOver(false)
+      if (isUploading) return
       processFiles(e.dataTransfer.files)
     },
-    [processFiles],
+    [processFiles, isUploading],
   )
 
-  /**
-   * Handle file input change
-   */
   const handleFileInputChange = React.useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       processFiles(e.target.files)
-      // Reset input value to allow selecting the same file again
       if (fileInputRef.current) {
         fileInputRef.current.value = ""
       }
@@ -218,16 +192,11 @@ export function FileUploadZone({
     [processFiles],
   )
 
-  /**
-   * Open file picker
-   */
   const openFilePicker = React.useCallback(() => {
+    if (isUploading) return
     fileInputRef.current?.click()
-  }, [])
+  }, [isUploading])
 
-  /**
-   * Memoized file list rendering for performance
-   */
   const fileListItems = React.useMemo(
     () =>
       files.map((file) => {
@@ -242,27 +211,21 @@ export function FileUploadZone({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium truncate">{file.name}</p>
-                    {file.isDuplicate && (
-                      <Badge variant="secondary" className="text-xs">
-                        Duplicate
-                      </Badge>
-                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
                   {file.status === "uploading" && (
                     <div className="mt-2">
                       <Progress value={file.progress} className="h-1" />
-                      <p className="text-xs text-muted-foreground mt-1">{file.progress}% uploaded</p>
+                      <p className="text-xs text-muted-foreground mt-1">Uploading...</p>
+                    </div>
+                  )}
+                  {file.status === "completed" && (
+                    <div className="mt-2">
+                      <Progress value={100} className="h-1" variant="success" />
+                      <p className="text-xs text-green-600 mt-1">Completed</p>
                     </div>
                   )}
                   {file.status === "error" && <p className="text-xs text-destructive mt-1">{file.error}</p>}
-                  {file.isDuplicate && file.duplicateInfo && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Original uploaded by {file.duplicateInfo.originalUploader} on {file.duplicateInfo.uploadDate}
-                      <br />
-                      Storage saved: {file.duplicateInfo.savings}
-                    </p>
-                  )}
                 </div>
                 <Button
                   variant="ghost"
@@ -284,7 +247,6 @@ export function FileUploadZone({
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* Drop zone */}
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -306,12 +268,10 @@ export function FileUploadZone({
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           disabled={isUploading}
         />
-
         <div className="space-y-4">
           <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
             <Upload className="h-6 w-6 text-primary" />
           </div>
-
           <div className="space-y-2">
             <h3 className="text-lg font-semibold">{isDragOver ? "Drop files here" : "Upload your files"}</h3>
             <p className="text-sm text-muted-foreground">Drag and drop files here, or click to browse</p>
@@ -319,29 +279,17 @@ export function FileUploadZone({
               <span>Max size: {formatFileSize(maxFileSize)}</span>
               <span>•</span>
               <span>Max files: {maxFiles}</span>
-              {acceptedTypes.length > 0 && (
-                <>
-                  <span>•</span>
-                  <span>Accepted: {acceptedTypes.join(", ")}</span>
-                </>
-              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* File list */}
       {files.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-medium">
               Files to upload ({files.length}/{maxFiles})
             </h4>
-            {files.length > 0 && !isUploading && (
-              <Button variant="outline" size="sm" onClick={() => files.forEach((file) => onFileRemove(file.id))}>
-                Clear All
-              </Button>
-            )}
           </div>
           <div className="space-y-2 max-h-64 overflow-y-auto">{fileListItems}</div>
         </div>
@@ -349,3 +297,9 @@ export function FileUploadZone({
     </div>
   )
 }
+
+// Added a "success" variant to Progress component
+// You might need to add this to your `components/ui/progress.tsx`
+// if (props.variant === "success") {
+//   className = cn(className, "bg-green-600")
+// }

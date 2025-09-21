@@ -1,8 +1,11 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+
+	"github.com/lib/pq"
 
 	"balkan/models"
 )
@@ -12,6 +15,7 @@ type UserStore interface {
 	CreateUser(user *models.User) error
 	GetUserByEmail(email string) (*models.User, error)
 	GetUserByID(id string) (*models.User, error)
+	GetUserIDsByEmails(ctx context.Context, emails []string) ([]string, error)
 }
 
 // DBUserStore is a concrete implementation of UserStore using a SQL database.
@@ -78,4 +82,30 @@ func (s *DBUserStore) GetUserByID(id string) (*models.User, error) {
 		return nil, err
 	}
 	return user, nil
+}
+
+// GetUserIDsByEmails fetches the UUIDs for a given list of email addresses.
+func (store *DBUserStore) GetUserIDsByEmails(ctx context.Context, emails []string) ([]string, error) {
+	query := `SELECT id FROM users WHERE email = ANY($1::text[])`
+
+	rows, err := store.db.QueryContext(ctx, query, pq.Array(emails))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user IDs by email: %w", err)
+	}
+	defer rows.Close()
+
+	var userIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan user ID: %w", err)
+		}
+		userIDs = append(userIDs, id)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating user ID rows: %w", err)
+	}
+
+	return userIDs, nil
 }

@@ -1,6 +1,16 @@
 package models
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
+
+// file visblity options
+const (
+	VisibilityPrivate  = "private"
+	VisibilityPublic   = "public"
+	VisibilitySpecific = "specific"
+)
 
 // PhysicalFile represents the actual stored content on disk.
 // One physical file can be referenced by many logical files (deduplication).
@@ -21,11 +31,19 @@ type LogicalFile struct {
 	OwnerID        string    `json:"owner_id"`
 	PhysicalFileID string    `json:"physical_file_id"`
 	FileName       string    `json:"file_name"`
+	Visibility     string    `json:"visibility"`
 	IsPublic       bool      `json:"is_public"`
 	ShareToken     string    `json:"share_token"`
 	DownloadCount  int       `json:"download_count"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+
+	// Use sql.NullString for nullable fields
+	PublicShareToken sql.NullString `json:"public_share_token"`
+
+	// --- This is the new field for JOINed data ---
+	// It's ignored by default when writing to JSON if empty.
+	PhysicalFile *PhysicalFile `json:"physical_file,omitempty"`
 }
 
 // FileUploadResponse is the structure returned after a successful file upload.

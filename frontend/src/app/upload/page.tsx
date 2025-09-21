@@ -9,17 +9,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, FileCheck, AlertTriangle, Info } from "lucide-react"
-
-/**
- * Mock user data for demonstration
- */
-const mockUser = {
-  name: "John Doe",
-  email: "john.doe@example.com",
-  avatar: "/diverse-user-avatars.png",
-  role: "admin" as const,
-}
+import {
+  Upload,
+  FileCheck,
+  AlertTriangle,
+  Info,
+  Loader2,
+  AlertCircle,
+  CheckCircle,
+} from "lucide-react"
+import { useAuth } from "@/context/AuthContext"
+import { useRouter } from "next/navigation"
 
 /**
  * Upload configuration constants
@@ -41,23 +41,54 @@ const UPLOAD_CONFIG = {
 
 /**
  * File upload page component
- * Provides comprehensive file upload interface with drag & drop,
- * progress tracking, duplicate detection, and error handling
  */
 export default function UploadPage() {
+  const { user, isLoading: isAuthLoading } = useAuth()
+  const router = useRouter()
+
   const { files, isUploading, stats, addFiles, removeFile, clearFiles, startUpload, cancelUpload, retryFailedUploads } =
     useFileUpload({
-      enableDuplicateDetection: true,
       maxConcurrentUploads: 3,
     })
 
   const [showProgressModal, setShowProgressModal] = React.useState(false)
+  const [uploadError, setUploadError] = React.useState<string | null>(null)
+  const [uploadSuccess, setUploadSuccess] = React.useState<string | null>(null)
+
+  // Auth check effect
+  React.useEffect(() => {
+    if (isAuthLoading) {
+      return // Wait for auth check
+    }
+    if (!user) {
+      console.log("No user, redirecting to /auth")
+      router.push("/auth")
+    }
+  }, [user, isAuthLoading, router])
+
+  // Effect to show success/error message when upload completes
+  React.useEffect(() => {
+    if (stats.isComplete && !isUploading) {
+      if (stats.failedFiles > 0) {
+        setUploadError(
+          `${stats.failedFiles} file(s) failed to upload. ${stats.completedFiles} succeeded.`,
+        )
+        setUploadSuccess(null)
+      } else if (stats.completedFiles > 0) {
+        setUploadSuccess(`${stats.completedFiles} file(s) uploaded successfully!`)
+        setUploadError(null)
+      }
+    }
+  }, [stats.isComplete, stats.failedFiles, stats.completedFiles, isUploading])
 
   /**
    * Handle upload start with progress modal
    */
   const handleStartUpload = React.useCallback(() => {
     if (files.length === 0) return
+    // Clear previous messages
+    setUploadError(null)
+    setUploadSuccess(null)
     setShowProgressModal(true)
     startUpload()
   }, [files.length, startUpload])
@@ -67,12 +98,15 @@ export default function UploadPage() {
    */
   const handleProgressModalClose = React.useCallback(
     (open: boolean) => {
-      // Only allow closing if upload is complete or not started
       if (!isUploading || stats.isComplete) {
         setShowProgressModal(open)
+        // If upload is complete, clear the file list
+        if (stats.isComplete) {
+          clearFiles()
+        }
       }
     },
-    [isUploading, stats.isComplete],
+    [isUploading, stats.isComplete, clearFiles],
   )
 
   /**
@@ -93,29 +127,71 @@ export default function UploadPage() {
     return {
       fileCount: files.length,
       totalSize: formatSize(totalSize),
-      duplicates: files.filter((f) => f.isDuplicate).length,
     }
   }, [files])
 
+  // Show loading spinner while checking auth
+  if (isAuthLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  // Show spinner if redirecting
+  if (!user) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  // NOTE: This assumes your `user` object from `useAuth`
+  // has `name`, `email`, and `role`. If not, you may need
+  // to fetch stats like you do on the DashboardPage or
+  // update your /api/me endpoint and AuthContext.
+  const layoutUser = {
+    name: user.username || "User",
+    email: user.email || "",
+    role: (user.userRole as "user" | "admin") || "user",
+  }
+
   return (
-    <MainLayout user={mockUser} notificationCount={3}>
+    <MainLayout user={layoutUser} notificationCount={3}>
       <div className="space-y-6">
         {/* Page header */}
         <div className="space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">Upload Files</h1>
           <p className="text-muted-foreground">
-            Upload single or multiple files with drag & drop support. Files are automatically checked for duplicates to
-            save storage space.
+            Upload single or multiple files with drag & drop support. Files are automatically checked for
+            duplicates to save storage space.
           </p>
         </div>
+
+        {/* --- ALERTS --- */}
+        {uploadError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{uploadError}</AlertDescription>
+          </Alert>
+        )}
+        {uploadSuccess && (
+          <Alert variant="default" className="border-green-600 bg-green-50 text-green-700">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertDescription>{uploadSuccess}</AlertDescription>
+          </Alert>
+        )}
+        {/* --- END ALERTS --- */}
+
 
         {/* Upload guidelines */}
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            <strong>Upload Guidelines:</strong> Maximum file size is 50MB. Up to 10 files can be uploaded at once.
-            Supported formats include images, documents, PDFs, and archives. Files are validated to prevent mismatched
-            extensions.
+            <strong>Upload Guidelines:</strong> Maximum file size is 50MB. Up to 10 files can be uploaded at
+            once. Supported formats include images, documents, PDFs, and archives.
           </AlertDescription>
         </Alert>
 
@@ -128,7 +204,9 @@ export default function UploadPage() {
                   <Upload className="h-5 w-5" />
                   File Upload
                 </CardTitle>
-                <CardDescription>Select files to upload or drag and drop them into the area below</CardDescription>
+                <CardDescription>
+                  Select files to upload or drag and drop them into the area below
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <FileUploadZone
@@ -156,8 +234,18 @@ export default function UploadPage() {
                       <Button variant="outline" onClick={clearFiles} disabled={isUploading}>
                         Clear All
                       </Button>
-                      <Button onClick={handleStartUpload} disabled={isUploading || files.length === 0}>
-                        {isUploading ? "Uploading..." : "Start Upload"}
+                      <Button
+                        onClick={handleStartUpload}
+                        disabled={isUploading || files.length === 0}
+                      >
+                        {isUploading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          "Start Upload"
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -184,14 +272,6 @@ export default function UploadPage() {
                       <span className="text-sm text-muted-foreground">Total Size</span>
                       <span className="text-sm font-medium">{uploadSummary.totalSize}</span>
                     </div>
-                    {uploadSummary.duplicates > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Duplicates</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {uploadSummary.duplicates}
-                        </Badge>
-                      </div>
-                    )}
                   </div>
 
                   {stats.isComplete && (
@@ -232,10 +312,6 @@ export default function UploadPage() {
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600" />
                   <span>File extensions are validated against content to prevent mismatched uploads</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Upload className="h-4 w-4 mt-0.5 text-blue-600" />
-                  <span>Large files are uploaded in chunks for better reliability</span>
                 </div>
               </CardContent>
             </Card>

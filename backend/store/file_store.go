@@ -5,6 +5,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
+	"github.com/google/uuid" // <-- ADDED
+	"github.com/lib/pq"
 )
 
 // FileStore defines the interface for file data operations.
@@ -13,6 +16,12 @@ type FileStore interface {
 	ProcessUpload(ctx context.Context, logicalFile *models.LogicalFile, physicalFile *models.PhysicalFile) (*models.LogicalFile, bool, error)
 	GetFileCountByUserID(userID string) (int64, error)
 	GetStorageUsageByUserID(userID string) (int64, error)
+	IsFileOwner(ctx context.Context, userID, fileID string) (bool, error)
+	SetFileVisibilityPrivate(ctx context.Context, fileID string) error
+	SetFileVisibilityPublic(ctx context.Context, fileID string) (string, error)
+	SetFileVisibilitySpecific(ctx context.Context, fileID string, userIDs []string) error
+	GetFileByPublicToken(ctx context.Context, token string) (*models.LogicalFile, error)
+	IncrementFileDownloadCount(ctx context.Context, fileID string) error
 }
 
 // DBFileStore is a concrete implementation of FileStore.
@@ -123,4 +132,145 @@ func (s *DBFileStore) GetStorageUsageByUserID(userID string) (int64, error) {
 
 	err := s.db.QueryRow(query, userID).Scan(&totalStorage)
 	return totalStorage, err
+}
+
+// IsFileOwner checks if a given user is the owner of a file.
+func (s *DBFileStore) IsFileOwner(ctx context.Context, userID, fileID string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM logical_files WHERE id = $1 AND owner_id = $2)`
+
+	var exists bool
+	err := s.db.QueryRowContext(ctx, query, fileID, userID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check file ownership: %w", err)
+	}
+
+	return exists, nil
+}
+
+// SetFileVisibilityPrivate sets a file's visibility to private, clearing all shares.
+func (s *DBFileStore) SetFileVisibilityPrivate(ctx context.Context, fileID string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // Rollback is a no-op if Commit succeeds
+
+	// 1. Update visibility and clear public token
+	queryUpdate := `UPDATE logical_files SET visibility = 'private', public_share_token = NULL WHERE id = $1`
+	if _, err := tx.ExecContext(ctx, queryUpdate, fileID); err != nil {
+		return fmt.Errorf("failed to set visibility to private: %w", err)
+	}
+
+	// 2. Delete all specific user shares
+	queryDelete := `DELETE FROM file_shares WHERE logical_file_id = $1`
+	if _, err := tx.ExecContext(ctx, queryDelete, fileID); err != nil {
+		return fmt.Errorf("failed to delete specific shares: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// SetFileVisibilityPublic sets a file's visibility to public and returns its share token.
+func (s *DBFileStore) SetFileVisibilityPublic(ctx context.Context, fileID string) (string, error) {
+	// Generate a new token to use *if* one doesn't exist
+	newToken := uuid.NewString()
+
+	query := `
+        UPDATE logical_files 
+        SET 
+            visibility = 'public', 
+            public_share_token = COALESCE(public_share_token, $1) 
+        WHERE id = $2 
+        RETURNING public_share_token
+    `
+
+	var token string
+	err := s.db.QueryRowContext(ctx, query, newToken, fileID).Scan(&token)
+	if err != nil {
+		return "", fmt.Errorf("failed to set visibility to public: %w", err)
+	}
+
+	return token, nil
+}
+
+// SetFileVisibilitySpecific shares a file with a specific list of users.
+func (s *DBFileStore) SetFileVisibilitySpecific(ctx context.Context, fileID string, userIDs []string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Update visibility and clear public token
+	queryUpdate := `UPDATE logical_files SET visibility = 'specific', public_share_token = NULL WHERE id = $1`
+	if _, err := tx.ExecContext(ctx, queryUpdate, fileID); err != nil {
+		return fmt.Errorf("failed to set visibility to specific: %w", err)
+	}
+
+	// 2. Delete any old shares
+	queryDelete := `DELETE FROM file_shares WHERE logical_file_id = $1`
+	if _, err := tx.ExecContext(ctx, queryDelete, fileID); err != nil {
+		return fmt.Errorf("failed to delete old specific shares: %w", err)
+	}
+
+	// 3. Insert the new shares (only if there are IDs to insert)
+	if len(userIDs) > 0 {
+		queryInsert := `
+            INSERT INTO file_shares (logical_file_id, shared_with_user_id)
+            SELECT $1, id
+            FROM unnest($2::uuid[]) AS t(id)
+        `
+		if _, err := tx.ExecContext(ctx, queryInsert, fileID, pq.Array(userIDs)); err != nil {
+			return fmt.Errorf("failed to insert new specific shares: %w", err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// GetFileByPublicToken finds a file by its public token and joins its physical file data.
+// NOTE: This assumes your models.LogicalFile struct has a `PhysicalFile *models.PhysicalFile` field.
+func (s *DBFileStore) GetFileByPublicToken(ctx context.Context, token string) (*models.LogicalFile, error) {
+	query := `
+        SELECT 
+            lf.id, lf.owner_id, lf.physical_file_id, lf.filename, 
+            lf.visibility, lf.download_count, lf.created_at,
+            pf.id, pf.sha256_hash, pf.size, pf.mime_type, pf.storage_path
+        FROM logical_files lf
+        JOIN physical_files pf ON lf.physical_file_id = pf.id
+        WHERE lf.public_share_token = $1 AND lf.visibility = 'public'
+    `
+
+	lf := &models.LogicalFile{
+		PhysicalFile: &models.PhysicalFile{}, // Important: Initialize the nested struct
+	}
+
+	// Assumes your LogicalFile struct fields match this order
+	err := s.db.QueryRowContext(ctx, query, token).Scan(
+		&lf.ID, &lf.OwnerID, &lf.PhysicalFileID, &lf.FileName,
+		&lf.Visibility, &lf.DownloadCount, &lf.CreatedAt,
+		&lf.PhysicalFile.ID, &lf.PhysicalFile.FileHash, &lf.PhysicalFile.Size,
+		&lf.PhysicalFile.MimeType, &lf.PhysicalFile.StoragePath,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, err // Handler will check for this
+		}
+		return nil, fmt.Errorf("failed to get file by public token: %w", err)
+	}
+
+	return lf, nil
+}
+
+// IncrementFileDownloadCount increases the download counter for a file.
+func (s *DBFileStore) IncrementFileDownloadCount(ctx context.Context, fileID string) error {
+	query := `UPDATE logical_files SET download_count = download_count + 1 WHERE id = $1`
+
+	_, err := s.db.ExecContext(ctx, query, fileID)
+	if err != nil {
+		return fmt.Errorf("failed to increment download count: %w", err)
+	}
+
+	return nil
 }

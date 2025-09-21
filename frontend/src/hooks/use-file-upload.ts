@@ -3,6 +3,9 @@
 import * as React from "react"
 import type { UploadFile, UploadStatus } from "@/components/upload/file-upload-zone"
 
+// Define the API endpoint
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+
 /**
  * Configuration for file upload hook
  */
@@ -11,10 +14,6 @@ interface UseFileUploadConfig {
   uploadEndpoint?: string
   /** Maximum concurrent uploads */
   maxConcurrentUploads?: number
-  /** Chunk size for large file uploads (in bytes) */
-  chunkSize?: number
-  /** Enable duplicate detection */
-  enableDuplicateDetection?: boolean
 }
 
 /**
@@ -24,10 +23,30 @@ interface UploadStats {
   totalFiles: number
   completedFiles: number
   failedFiles: number
-  totalBytes: number
-  uploadedBytes: number
   overallProgress: number
   isComplete: boolean
+}
+
+/**
+* Helper function to immutably create a new UploadFile
+* This is the core of the fix.
+*/
+function createNewUploadFile(
+  f: UploadFile,
+  newStatus: UploadStatus,
+  newProgress: number,
+  newError?: string,
+): UploadFile {
+  // 1. Create a new File object from the old one
+  const newFile = new File([f], f.name, { type: f.type, lastModified: f.lastModified }) as UploadFile
+  
+  // 2. Copy over all our custom properties
+  newFile.id = f.id // Preserve the original ID
+  newFile.status = newStatus
+  newFile.progress = newProgress
+  newFile.error = newError
+  
+  return newFile
 }
 
 /**
@@ -36,10 +55,8 @@ interface UploadStats {
  */
 export function useFileUpload(config: UseFileUploadConfig = {}) {
   const {
-    uploadEndpoint = "/api/files/upload",
+    uploadEndpoint = `${API_BASE_URL}/api/files`,
     maxConcurrentUploads = 3,
-    chunkSize = 1024 * 1024, // 1MB chunks
-    enableDuplicateDetection = true,
   } = config
 
   const [files, setFiles] = React.useState<UploadFile[]>([])
@@ -59,12 +76,14 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
    */
   const addFiles = React.useCallback(
     (newFiles: File[]) => {
-      const uploadFiles: UploadFile[] = newFiles.map((file) => ({
-        ...file,
-        id: generateFileId(),
-        status: "pending" as UploadStatus,
-        progress: 0,
-      }))
+      // This fix is from last time, and it's correct.
+      const uploadFiles = newFiles.map((file) => {
+        const uploadFile = file as UploadFile
+        uploadFile.id = generateFileId()
+        uploadFile.status = "pending"
+        uploadFile.progress = 0
+        return uploadFile
+      })
 
       setFiles((prev) => [...prev, ...uploadFiles])
       uploadQueueRef.current.push(...uploadFiles.map((f) => f.id))
@@ -88,37 +107,8 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
     setFiles([])
     uploadQueueRef.current = []
     activeUploadsRef.current.clear()
+    setIsUploading(false)
   }, [])
-
-  /**
-   * Simulate duplicate detection (in real app, this would call the backend)
-   */
-  const checkForDuplicates = React.useCallback(
-    async (file: UploadFile): Promise<UploadFile> => {
-      if (!enableDuplicateDetection) return file
-
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      // Simulate 20% chance of duplicate detection
-      const isDuplicate = Math.random() < 0.2
-
-      if (isDuplicate) {
-        return {
-          ...file,
-          isDuplicate: true,
-          duplicateInfo: {
-            originalUploader: "jane.doe@example.com",
-            uploadDate: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-            savings: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-          },
-        }
-      }
-
-      return file
-    },
-    [enableDuplicateDetection],
-  )
 
   /**
    * Upload a single file with progress tracking
@@ -126,90 +116,75 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
   const uploadFile = React.useCallback(
     async (fileId: string): Promise<void> => {
       const file = files.find((f) => f.id === fileId)
-      if (!file) return
+      if (!file || file.status === "uploading") return
 
       try {
+        // --- FIX 1 ---
         // Update status to uploading
         setFiles((prev) =>
-          prev.map((f) => (f.id === fileId ? { ...f, status: "uploading" as UploadStatus, progress: 0 } : f)),
+          prev.map((f) =>
+            f.id === fileId ? createNewUploadFile(f, "uploading", 50) : f,
+          ),
         )
 
-        // Check for duplicates first
-        const checkedFile = await checkForDuplicates(file)
-        if (checkedFile.isDuplicate) {
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === fileId
-                ? {
-                    ...f,
-                    ...checkedFile,
-                    status: "completed" as UploadStatus,
-                    progress: 100,
-                  }
-                : f,
-            ),
-          )
-          return
+        // Create form data
+        const formData = new FormData()
+        formData.append("files", file)
+
+        // Perform the actual upload
+        const response = await fetch(uploadEndpoint, {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || "Upload failed")
         }
 
-        // Simulate file upload with progress
-        const totalChunks = Math.ceil(file.size / chunkSize)
-        for (let chunk = 0; chunk < totalChunks; chunk++) {
-          // Simulate chunk upload delay
-          await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200))
-
-          const progress = Math.round(((chunk + 1) / totalChunks) * 100)
-          setFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, progress } : f)))
-
-          // Simulate random upload errors (5% chance)
-          if (Math.random() < 0.05) {
-            throw new Error("Network error during upload")
-          }
-        }
-
+        // --- FIX 2 ---
         // Mark as completed
         setFiles((prev) =>
           prev.map((f) =>
-            f.id === fileId
-              ? {
-                  ...f,
-                  status: "completed" as UploadStatus,
-                  progress: 100,
-                }
-              : f,
+            f.id === fileId ? createNewUploadFile(f, "completed", 100) : f,
           ),
         )
       } catch (error) {
+        // --- FIX 3 ---
         // Mark as error
+        const errorMsg = error instanceof Error ? error.message : "Upload failed"
         setFiles((prev) =>
           prev.map((f) =>
-            f.id === fileId
-              ? {
-                  ...f,
-                  status: "error" as UploadStatus,
-                  error: error instanceof Error ? error.message : "Upload failed",
-                }
-              : f,
+            f.id === fileId ? createNewUploadFile(f, "error", 0, errorMsg) : f,
           ),
         )
       } finally {
         activeUploadsRef.current.delete(fileId)
+        processUploadQueue()
       }
     },
-    [files, chunkSize, checkForDuplicates],
+    [files, uploadEndpoint], 
   )
 
   /**
    * Process upload queue with concurrency control
    */
   const processUploadQueue = React.useCallback(async () => {
-    while (uploadQueueRef.current.length > 0 && activeUploadsRef.current.size < maxConcurrentUploads) {
-      const fileId = uploadQueueRef.current.shift()
-      if (fileId) {
-        activeUploadsRef.current.add(fileId)
-        uploadFile(fileId)
-      }
+    if (activeUploadsRef.current.size >= maxConcurrentUploads) {
+      return
     }
+
+    const fileId = uploadQueueRef.current.shift()
+    if (!fileId) {
+      if (activeUploadsRef.current.size === 0) {
+        setIsUploading(false)
+      }
+      return
+    }
+
+    activeUploadsRef.current.add(fileId)
+    await uploadFile(fileId)
   }, [uploadFile, maxConcurrentUploads])
 
   /**
@@ -219,23 +194,20 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
     if (files.length === 0 || isUploading) return
 
     setIsUploading(true)
-    uploadQueueRef.current = files.filter((f) => f.status === "pending").map((f) => f.id)
+    uploadQueueRef.current = files.filter((f) => f.status === "pending" || f.status === "error").map((f) => f.id)
 
-    // Process queue until all files are uploaded
-    const processInterval = setInterval(() => {
+    // --- FIX 4 ---
+    // Reset error files to pending
+    setFiles((prev) =>
+      prev.map((f) =>
+        f.status === "error" ? createNewUploadFile(f, "pending", 0) : f,
+      ),
+    )
+
+    for (let i = 0; i < maxConcurrentUploads; i++) {
       processUploadQueue()
-
-      // Check if all uploads are complete
-      const allComplete = files.every((f) => f.status === "completed" || f.status === "error")
-      const noActiveUploads = activeUploadsRef.current.size === 0
-      const queueEmpty = uploadQueueRef.current.length === 0
-
-      if (allComplete && noActiveUploads && queueEmpty) {
-        clearInterval(processInterval)
-        setIsUploading(false)
-      }
-    }, 100)
-  }, [files, isUploading, processUploadQueue])
+    }
+  }, [files, isUploading, maxConcurrentUploads, processUploadQueue])
 
   /**
    * Cancel ongoing uploads
@@ -245,58 +217,41 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
     uploadQueueRef.current = []
     activeUploadsRef.current.clear()
 
+    // --- FIX 5 ---
     // Reset uploading files to pending
     setFiles((prev) =>
-      prev.map((f) => (f.status === "uploading" ? { ...f, status: "pending" as UploadStatus, progress: 0 } : f)),
+      prev.map((f) =>
+        f.status === "uploading" ? createNewUploadFile(f, "pending", 0) : f,
+      ),
     )
   }, [])
 
   /**
-   * Retry failed uploads
+   * Retry failed uploads (now just an alias for startUpload)
    */
   const retryFailedUploads = React.useCallback(() => {
-    const failedFiles = files.filter((f) => f.status === "error")
-    if (failedFiles.length === 0) return
-
-    // Reset failed files to pending
-    setFiles((prev) =>
-      prev.map((f) =>
-        f.status === "error"
-          ? {
-              ...f,
-              status: "pending" as UploadStatus,
-              progress: 0,
-              error: undefined,
-            }
-          : f,
-      ),
-    )
-
-    // Add to queue and start upload
-    uploadQueueRef.current.push(...failedFiles.map((f) => f.id))
-    if (!isUploading) {
-      startUpload()
-    }
-  }, [files, isUploading, startUpload])
+    startUpload()
+  }, [startUpload])
 
   /**
    * Calculate upload statistics
    */
   const stats: UploadStats = React.useMemo(() => {
     const totalFiles = files.length
+    if (totalFiles === 0) {
+      return { totalFiles: 0, completedFiles: 0, failedFiles: 0, overallProgress: 0, isComplete: false }
+    }
+    
     const completedFiles = files.filter((f) => f.status === "completed").length
     const failedFiles = files.filter((f) => f.status === "error").length
-    const totalBytes = files.reduce((sum, f) => sum + f.size, 0)
-    const uploadedBytes = files.reduce((sum, f) => sum + (f.size * f.progress) / 100, 0)
-    const overallProgress = totalBytes > 0 ? (uploadedBytes / totalBytes) * 100 : 0
-    const isComplete = totalFiles > 0 && completedFiles + failedFiles === totalFiles
+    const processedFiles = completedFiles + failedFiles
+    const overallProgress = (processedFiles / totalFiles) * 100
+    const isComplete = totalFiles > 0 && processedFiles === totalFiles
 
     return {
       totalFiles,
       completedFiles,
       failedFiles,
-      totalBytes,
-      uploadedBytes,
       overallProgress,
       isComplete,
     }

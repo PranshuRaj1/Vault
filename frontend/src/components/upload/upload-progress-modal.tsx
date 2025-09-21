@@ -1,11 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { CheckCircle, XCircle, AlertCircle, Upload } from "lucide-react"
+import { CheckCircle, XCircle, AlertCircle, Upload, Loader2 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+// Removed Badge import
 import type { UploadFile } from "./file-upload-zone"
 
 interface UploadProgressModalProps {
@@ -31,7 +31,6 @@ interface UploadProgressModalProps {
 
 /**
  * Modal component for displaying upload progress
- * Shows individual file progress and overall status
  */
 export function UploadProgressModal({
   open,
@@ -54,7 +53,7 @@ export function UploadProgressModal({
       case "error":
         return <XCircle className="h-4 w-4 text-destructive" />
       case "uploading":
-        return <Upload className="h-4 w-4 text-primary animate-pulse" />
+        return <Loader2 className="h-4 w-4 text-primary animate-spin" />
       default:
         return <AlertCircle className="h-4 w-4 text-muted-foreground" />
     }
@@ -71,20 +70,14 @@ export function UploadProgressModal({
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{file.name}</p>
             <div className="flex items-center gap-2 mt-1">
-              <Progress value={file.progress} className="flex-1 h-1" />
+              <Progress
+                value={file.progress}
+                className="flex-1 h-1"
+                variant={file.status === "completed" ? "success" : "default"}
+              />
               <span className="text-xs text-muted-foreground">{file.progress}%</span>
             </div>
             {file.error && <p className="text-xs text-destructive mt-1">{file.error}</p>}
-            {file.isDuplicate && (
-              <div className="flex items-center gap-1 mt-1">
-                <Badge variant="secondary" className="text-xs">
-                  Duplicate Detected
-                </Badge>
-                {file.duplicateInfo && (
-                  <span className="text-xs text-muted-foreground">Saved {file.duplicateInfo.savings}</span>
-                )}
-              </div>
-            )}
           </div>
         </div>
       )),
@@ -106,36 +99,40 @@ export function UploadProgressModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 flex-1 overflow-hidden">
+        <div className="space-y-4 flex-1 overflow-y-auto p-1">
           {/* Overall progress */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Overall Progress</span>
               <span className="text-sm text-muted-foreground">{Math.round(overallProgress)}%</span>
             </div>
-            <Progress value={overallProgress} className="h-2" />
+            <Progress
+              value={overallProgress}
+              className="h-2"
+              variant={isComplete && errorCount === 0 ? "success" : "default"}
+            />
           </div>
 
           {/* File list */}
-          <div className="space-y-2 overflow-y-auto flex-1">
+          <div className="space-y-2">
             <h4 className="text-sm font-medium">Files</h4>
             <div className="space-y-2">{fileList}</div>
           </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center justify-end gap-2 pt-4 border-t">
-            {!isComplete && onCancel && (
-              <Button variant="outline" onClick={onCancel}>
-                Cancel Upload
-              </Button>
-            )}
-            {isComplete && errorCount > 0 && onRetry && (
-              <Button variant="outline" onClick={onRetry}>
-                Retry Failed
-              </Button>
-            )}
-            {isComplete && <Button onClick={() => onOpenChange(false)}>{errorCount > 0 ? "Close" : "Done"}</Button>}
-          </div>
+        </div>
+        
+        {/* Action buttons */}
+        <div className="flex items-center justify-end gap-2 pt-4 border-t">
+          {!isComplete && onCancel && (
+            <Button variant="outline" onClick={onCancel}>
+              Cancel Upload
+            </Button>
+          )}
+          {isComplete && errorCount > 0 && onRetry && (
+            <Button variant="outline" onClick={onRetry}>
+              Retry Failed
+            </Button>
+          )}
+          {isComplete && <Button onClick={() => onOpenChange(false)}>{errorCount > 0 ? "Close" : "Done"}</Button>}
         </div>
       </DialogContent>
     </Dialog>

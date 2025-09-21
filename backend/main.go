@@ -48,6 +48,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(userStore)
 	fileHandler := handlers.NewFileHandler(userStore, fileStore) // New handler for files
 	dashboardHandler := handlers.NewDashboardHandler(userStore, fileStore)
+	shareHandler := handlers.NewShareHandler(fileStore, userStore)
 
 	// --- Router Setup ---
 	r := chi.NewRouter()
@@ -75,6 +76,8 @@ func main() {
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
 
+		r.Get("/public/file/{token}", shareHandler.GetPublicFile)
+
 		// --- Protected Routes (Auth Required) ---
 		r.Group(func(r chi.Router) {
 			// Apply the AuthMiddleware to this entire group of routes
@@ -96,6 +99,9 @@ func main() {
 
 			// file data
 			r.Get("/dashboard-stats", dashboardHandler.GetDashboardStats)
+
+			// file
+			r.Post("/share/file/{fileID}", shareHandler.UpdateFileShareSettings)
 		})
 	})
 
