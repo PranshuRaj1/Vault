@@ -76,7 +76,7 @@ type FileMetadata struct {
 	OriginalName  string         `json:"originalName"`
 	Size          int64          `json:"size"`       // From physical_files
 	MimeType      string         `json:"mimeType"`   // From physical_files
-	Extension     sql.NullString `json:"extension"`  // Derived from filename
+	Extension     string         `json:"extension"`  // Derived from filename
 	Hash          string         `json:"hash"`       // From physical_files
 	Visibility    string         `json:"visibility"` // From logical_files
 	Status        string         `json:"status"`

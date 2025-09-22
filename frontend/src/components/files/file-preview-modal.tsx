@@ -142,13 +142,13 @@ export function FilePreviewModal({ file, open, onOpenChange, onDownload, onShare
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-start justify-between">
             <div className="space-y-1 min-w-0 flex-1">
-              <DialogTitle className="text-xl truncate">{file.name}</DialogTitle>
+              <DialogTitle className="text-xl truncate">{file?.name}</DialogTitle>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{formatFileSize(file.size)}</span>
+                <span>{formatFileSize(file?.size)}</span>
                 <span>•</span>
-                <span>{(file.extension.string || "Untitled").toUpperCase()}</span>
+                <span>{(file?.extension || "Untitled").toUpperCase()}</span>
                 <span>•</span>
-                <span>{file.mimeType}</span>
+                <span>{file?.mimeType}</span>
               </div>
             </div>
             <div className="flex items-center gap-2 ml-4">

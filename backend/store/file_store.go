@@ -302,14 +302,24 @@ func (s *DBFileStore) GetFilesByUserID(ctx context.Context, userID string) ([]mo
 	var files []models.FileMetadata
 	for rows.Next() {
 		var f models.FileMetadata
+		var ext sql.NullString // --- 1. Use a temporary variable for scanning ---
+
 		err := rows.Scan(
 			&f.ID, &f.Name, &f.OriginalName, &f.Size, &f.MimeType,
-			&f.Extension, &f.Hash, &f.Visibility, &f.Status,
+			&ext, // --- 2. Scan into the temporary variable ---
+			&f.Hash, &f.Visibility, &f.Status,
 			&f.UploadedAt, &f.UpdatedAt, &f.UploadedBy.ID, &f.UploadedBy.Name, &f.UploadedBy.Email,
 			&f.DownloadCount,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan file row: %w", err)
+		}
+
+		// --- 3. Check if the string is valid and assign it ---
+		if ext.Valid {
+			f.Extension = ext.String
+		} else {
+			f.Extension = "" // Assign an empty string if null
 		}
 
 		f.IsOwner = true // This query only fetches the owner's files
