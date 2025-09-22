@@ -94,6 +94,9 @@ func main() {
 			// Route for handling file uploads
 			r.Post("/files", fileHandler.UploadFiles)
 
+			//get my files
+			r.Get("/files", fileHandler.GetMyFiles)
+
 			// log out route
 			r.Post("/logout", authHandler.Logout)
 

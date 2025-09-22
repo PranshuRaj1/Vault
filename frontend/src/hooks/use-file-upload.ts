@@ -63,6 +63,7 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
   const [isUploading, setIsUploading] = React.useState(false)
   const uploadQueueRef = React.useRef<string[]>([])
   const activeUploadsRef = React.useRef<Set<string>>(new Set())
+  const uploadOptionsRef = React.useRef({ visibility: "private" })
 
   /**
    * Generate unique ID for files
@@ -131,6 +132,8 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
         const formData = new FormData()
         formData.append("files", file)
 
+        formData.append("visibility", uploadOptionsRef.current.visibility)
+
         // Perform the actual upload
         const response = await fetch(uploadEndpoint, {
           method: "POST",
@@ -190,8 +193,11 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
   /**
    * Start upload process
    */
-  const startUpload = React.useCallback(async () => {
+  const startUpload = React.useCallback(async (options: { visibility: string }) => {
     if (files.length === 0 || isUploading) return
+
+    uploadOptionsRef.current = options
+
 
     setIsUploading(true)
     uploadQueueRef.current = files.filter((f) => f.status === "pending" || f.status === "error").map((f) => f.id)
@@ -229,7 +235,7 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
    * Retry failed uploads (now just an alias for startUpload)
    */
   const retryFailedUploads = React.useCallback(() => {
-    startUpload()
+    startUpload({ visibility: uploadOptionsRef.current.visibility || "private" })
   }, [startUpload])
 
   /**

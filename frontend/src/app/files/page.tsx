@@ -21,132 +21,19 @@ import {
   CheckSquare,
   Square,
   RefreshCw,
+  Loader2,
+  AlertCircle,
 } from "lucide-react"
 import type { FileMetadata } from "@/types/file"
+import { useAuth } from "@/context/AuthContext"
+import { useRouter } from "next/navigation"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
-/**
- * Mock user data
- */
-const mockUser = {
-  name: "John Doe",
-  email: "john.doe@example.com",
-  avatar: "/diverse-user-avatars.png",
-  role: "admin" as const,
-}
 
-/**
- * Mock file data for demonstration
- */
-const mockFiles: FileMetadata[] = [
-  {
-    id: "file_1",
-    name: "Project Proposal.pdf",
-    originalName: "Project Proposal.pdf",
-    size: 2048576,
-    mimeType: "application/pdf",
-    extension: "pdf",
-    hash: "sha256_abc123def456",
-    visibility: "private",
-    status: "ready",
-    uploadedAt: "2024-01-15T10:30:00Z",
-    updatedAt: "2024-01-15T10:30:00Z",
-    uploadedBy: {
-      id: "user_1",
-      name: "John Doe",
-      email: "john.doe@example.com",
-    },
-    downloadCount: 5,
-    isOwner: true,
-    isDuplicate: false,
-    tags: ["work", "proposal"],
-    description: "Q1 project proposal document",
-    downloadUrl: "/api/files/file_1/download",
-  },
-  {
-    id: "file_2",
-    name: "team-photo.jpg",
-    originalName: "team-photo.jpg",
-    size: 1536000,
-    mimeType: "image/jpeg",
-    extension: "jpg",
-    hash: "sha256_def456ghi789",
-    visibility: "public",
-    status: "ready",
-    uploadedAt: "2024-01-14T15:45:00Z",
-    updatedAt: "2024-01-14T15:45:00Z",
-    uploadedBy: {
-      id: "user_2",
-      name: "Jane Smith",
-      email: "jane.smith@example.com",
-    },
-    downloadCount: 23,
-    isOwner: false,
-    isDuplicate: false,
-    tags: ["team", "photo"],
-    previewUrl: "/placeholder.svg?height=400&width=600&text=Team+Photo",
-    downloadUrl: "/api/files/file_2/download",
-  },
-  {
-    id: "file_3",
-    name: "backup-data.zip",
-    originalName: "backup-data.zip",
-    size: 52428800,
-    mimeType: "application/zip",
-    extension: "zip",
-    hash: "sha256_ghi789jkl012",
-    visibility: "private",
-    status: "ready",
-    uploadedAt: "2024-01-13T09:15:00Z",
-    updatedAt: "2024-01-13T09:15:00Z",
-    uploadedBy: {
-      id: "user_1",
-      name: "John Doe",
-      email: "john.doe@example.com",
-    },
-    downloadCount: 1,
-    isOwner: true,
-    isDuplicate: true,
-    duplicateInfo: {
-      originalFileId: "file_0",
-      originalUploader: "admin@example.com",
-      uploadDate: "2024-01-10",
-      savings: 52428800,
-    },
-    tags: ["backup", "archive"],
-    downloadUrl: "/api/files/file_3/download",
-  },
-  {
-    id: "file_4",
-    name: "presentation.pptx",
-    originalName: "presentation.pptx",
-    size: 8192000,
-    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    extension: "pptx",
-    hash: "sha256_jkl012mno345",
-    visibility: "shared",
-    status: "ready",
-    uploadedAt: "2024-01-12T14:20:00Z",
-    updatedAt: "2024-01-12T14:20:00Z",
-    uploadedBy: {
-      id: "user_3",
-      name: "Bob Wilson",
-      email: "bob.wilson@example.com",
-    },
-    downloadCount: 12,
-    isOwner: false,
-    isDuplicate: false,
-    sharedWith: [
-      {
-        userId: "user_1",
-        userName: "John Doe",
-        userEmail: "john.doe@example.com",
-        sharedAt: "2024-01-12T14:25:00Z",
-      },
-    ],
-    tags: ["presentation", "meeting"],
-    downloadUrl: "/api/files/file_4/download",
-  },
-]
+// api url
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+
+
 
 /**
  * View mode type
@@ -159,8 +46,8 @@ type ViewMode = "grid" | "list"
  */
 export default function FilesPage() {
   // State management
-  const [files, setFiles] = React.useState<FileMetadata[]>(mockFiles)
-  const [filteredFiles, setFilteredFiles] = React.useState<FileMetadata[]>(mockFiles)
+  const [files, setFiles] = React.useState<FileMetadata[]>([])
+  const [filteredFiles, setFilteredFiles] = React.useState<FileMetadata[]>([])
   const [selectedFiles, setSelectedFiles] = React.useState<string[]>([])
   const [selectionMode, setSelectionMode] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<ViewMode>("grid")
@@ -169,20 +56,70 @@ export default function FilesPage() {
   const [sortDirection, setSortDirection] = React.useState<SortDirection>("desc")
   const [previewFile, setPreviewFile] = React.useState<FileMetadata | null>(null)
   const [isLoading, setIsLoading] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const { user, isLoading: isAuthLoading } = useAuth()
+  const router  = useRouter()
+
+
+  // data fetching function
+  const fetchFiles = React.useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/files`, {
+        method: "GET",
+        credentials: "include", // This is crucial for sending your auth cookie
+      })
+
+      if (!response.ok) {
+        const errData = await response.json()
+        throw new Error(errData.error || "Failed to fetch files")
+      }
+
+      const data: FileMetadata[] = await response.json()
+      console.log(data);
+      
+      setFiles(data) // Set the master list
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unknown error occurred")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // auth check and initial fetch
+
+  React.useEffect(() => {
+    if (isAuthLoading) {
+      return // Wait for auth check
+    }
+    if (!user) {
+      console.log("No user, redirecting to /auth")
+      router.push("/auth")
+      return
+    }
+    // Once user is confirmed, fetch their files
+    fetchFiles()
+  }, [user, isAuthLoading, router, fetchFiles])
+
+
 
   /**
    * Filter and sort files based on current criteria
    */
   React.useEffect(() => {
-    let filtered = [...files]
+    // 1. Provide a fallback for 'files'
+    let filtered = [...(files || [])]
 
     // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(
         (file) =>
-          file.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          file.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          file.uploadedBy.name.toLowerCase().includes(searchQuery.toLowerCase()),
+          // 2. Add optional chaining (?) and fallbacks (||)
+          (file.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+          (file.tags || []).some((tag) => (tag?.toLowerCase() || "").includes(searchQuery.toLowerCase())) ||
+          (file.uploadedBy?.name?.toLowerCase() || "").includes(searchQuery.toLowerCase())
       )
     }
 
@@ -192,13 +129,22 @@ export default function FilesPage() {
       let bValue: any = b[sortField]
 
       if (sortField === "uploadedBy") {
-        aValue = a.uploadedBy.name
-        bValue = b.uploadedBy.name
+        // 3. Use optional chaining here too
+        aValue = a.uploadedBy?.name
+        bValue = b.uploadedBy?.name
       }
 
+      // 4. Handle cases where values might be null or undefined
       if (typeof aValue === "string") {
         aValue = aValue.toLowerCase()
+      } else if (aValue == null) { // Catches null or undefined
+        aValue = "" // Use an empty string as a fallback
+      }
+
+      if (typeof bValue === "string") {
         bValue = bValue.toLowerCase()
+      } else if (bValue == null) {
+        bValue = ""
       }
 
       if (sortDirection === "asc") {
@@ -227,7 +173,7 @@ export default function FilesPage() {
       delete: (file: FileMetadata) => {
         console.log("Deleting file:", file.name)
         // TODO: Implement delete confirmation
-        setFiles((prev) => prev.filter((f) => f.id !== file.id))
+        setFiles((prev) => (prev || []).filter((f) => f.id !== file.id))
       },
       preview: (file: FileMetadata) => {
         setPreviewFile(file)
@@ -249,7 +195,7 @@ export default function FilesPage() {
         setSelectedFiles((prev) => (selected ? [...prev, fileId] : prev.filter((id) => id !== fileId)))
       },
       selectAll: (selected: boolean) => {
-        setSelectedFiles(selected ? filteredFiles.map((f) => f.id) : [])
+        setSelectedFiles(selected ? (filteredFiles || []).map((f) => f.id) : [])
       },
       clear: () => {
         setSelectedFiles([])
@@ -277,7 +223,7 @@ export default function FilesPage() {
       delete: () => {
         console.log("Bulk deleting files:", selectedFiles)
         // TODO: Implement bulk delete confirmation
-        setFiles((prev) => prev.filter((f) => !selectedFiles.includes(f.id)))
+        setFiles((prev) => (prev || []).filter((f) => !selectedFiles.includes(f.id)))
         setSelectedFiles([])
       },
       share: () => {
@@ -307,22 +253,33 @@ export default function FilesPage() {
    * Refresh files
    */
   const handleRefresh = React.useCallback(() => {
-    setIsLoading(true)
-    // TODO: Implement actual API call
-    setTimeout(() => {
-      setIsLoading(false)
-    }, 1000)
-  }, [])
+    fetchFiles()
+  }, [fetchFiles])
+
+  // hanlde auth loading state
+  if (isAuthLoading || !user) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+   const layoutUser = {
+    name: user.username || "User", // Map username to name
+    email: user.email || "",        // Provide a fallback
+    role: (user.userRole as "user" | "admin") || "user", // Map userRole to role
+  }
 
   return (
-    <MainLayout user={mockUser} notificationCount={3}>
+    <MainLayout user={layoutUser} notificationCount={3}>
       <div className="space-y-6">
         {/* Page header */}
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <h1 className="text-3xl font-bold tracking-tight">My Files</h1>
             <p className="text-muted-foreground">
-              Manage and organize your uploaded files. {filteredFiles.length} of {files.length} files shown.
+              Manage and organize your uploaded files. {(filteredFiles || []).length} of {(files || []).length} files shown.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -430,11 +387,19 @@ export default function FilesPage() {
             </div>
           </div>
         )}
+{/* 
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )} */}
 
         {/* File display */}
         {viewMode === "grid" ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredFiles.map((file) => (
+            {(filteredFiles || []).map((file) => (
               <FileCard
                 key={file.id}
                 file={file}
@@ -452,7 +417,7 @@ export default function FilesPage() {
           </div>
         ) : (
           <FileListView
-            files={filteredFiles}
+            files={filteredFiles || []}
             selectedFiles={selectedFiles}
             selectionMode={selectionMode}
             sortField={sortField}
@@ -470,7 +435,7 @@ export default function FilesPage() {
         )}
 
         {/* Empty state */}
-        {filteredFiles.length === 0 && !isLoading && (
+        {(filteredFiles || []).length === 0 && !isLoading && (
           <div className="text-center py-12">
             <div className="text-muted-foreground space-y-2">
               <p className="text-lg">No files found</p>

@@ -146,7 +146,7 @@ export function FilePreviewModal({ file, open, onOpenChange, onDownload, onShare
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>{formatFileSize(file.size)}</span>
                 <span>•</span>
-                <span>{file.extension.toUpperCase()}</span>
+                <span>{(file.extension.string || "Untitled").toUpperCase()}</span>
                 <span>•</span>
                 <span>{file.mimeType}</span>
               </div>
@@ -269,7 +269,7 @@ export function FilePreviewModal({ file, open, onOpenChange, onDownload, onShare
                   )}
 
                   {/* Tags */}
-                  {file.tags.length > 0 && (
+                  {(file.tags || []).length > 0 && (
                     <>
                       <Separator />
                       <div className="space-y-3">

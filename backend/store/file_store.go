@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/google/uuid" // <-- ADDED
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
 
@@ -22,6 +22,7 @@ type FileStore interface {
 	SetFileVisibilitySpecific(ctx context.Context, fileID string, userIDs []string) error
 	GetFileByPublicToken(ctx context.Context, token string) (*models.LogicalFile, error)
 	IncrementFileDownloadCount(ctx context.Context, fileID string) error
+	GetFilesByUserID(ctx context.Context, userID string) ([]models.FileMetadata, error)
 }
 
 // DBFileStore is a concrete implementation of FileStore.
@@ -81,13 +82,15 @@ func (s *DBFileStore) ProcessUpload(ctx context.Context, logicalFile *models.Log
 
 	// 3. Insert the logical file record for the user.
 	insertLogicalQuery := `
-		INSERT INTO logical_files (owner_id, physical_file_id, filename)
-		VALUES ($1, $2, $3) RETURNING id, created_at, updated_at`
+        INSERT INTO logical_files (owner_id, physical_file_id, filename, visibility)
+        VALUES ($1, $2, $3, $4) 
+        RETURNING id, created_at, updated_at, visibility`
 	err = tx.QueryRowContext(ctx, insertLogicalQuery,
 		logicalFile.OwnerID,
 		logicalFile.PhysicalFileID,
 		logicalFile.FileName,
-	).Scan(&logicalFile.ID, &logicalFile.CreatedAt, &logicalFile.UpdatedAt)
+		logicalFile.Visibility,
+	).Scan(&logicalFile.ID, &logicalFile.CreatedAt, &logicalFile.UpdatedAt, &logicalFile.Visibility)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to insert logical file: %w", err)
 	}
@@ -273,4 +276,58 @@ func (s *DBFileStore) IncrementFileDownloadCount(ctx context.Context, fileID str
 	}
 
 	return nil
+}
+
+// GetFilesByUserID retrieves all files owned by a user with joined data.
+func (s *DBFileStore) GetFilesByUserID(ctx context.Context, userID string) ([]models.FileMetadata, error) {
+	query := `
+        SELECT 
+            lf.id, lf.filename, lf.filename AS originalName, pf.size, pf.mime_type, 
+            SUBSTRING(lf.filename FROM '\.([^\.]*)$') AS extension,
+            pf.sha256_hash, lf.visibility, 'ready' AS status, 
+            lf.created_at, lf.updated_at, u.id AS user_id, u.username, u.email,
+            lf.download_count
+        FROM logical_files lf
+        JOIN physical_files pf ON lf.physical_file_id = pf.id
+        JOIN users u ON lf.owner_id = u.id
+        WHERE lf.owner_id = $1
+        ORDER BY lf.created_at DESC
+    `
+	rows, err := s.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query files: %w", err)
+	}
+	defer rows.Close()
+
+	var files []models.FileMetadata
+	for rows.Next() {
+		var f models.FileMetadata
+		err := rows.Scan(
+			&f.ID, &f.Name, &f.OriginalName, &f.Size, &f.MimeType,
+			&f.Extension, &f.Hash, &f.Visibility, &f.Status,
+			&f.UploadedAt, &f.UpdatedAt, &f.UploadedBy.ID, &f.UploadedBy.Name, &f.UploadedBy.Email,
+			&f.DownloadCount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan file row: %w", err)
+		}
+
+		f.IsOwner = true // This query only fetches the owner's files
+		// Note: You need a route for this, e.g., /api/files/download/{id}
+		// For now, we'll construct a placeholder or leave it.
+		// f.DownloadURL = fmt.Sprintf("/api/files/download/%s", f.ID)
+
+		files = append(files, f)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during rows iteration: %w", err)
+	}
+
+	// This part was in your file_handler.go, it's better to ensure it here.
+	if files == nil {
+		files = []models.FileMetadata{}
+	}
+
+	return files, nil
 }

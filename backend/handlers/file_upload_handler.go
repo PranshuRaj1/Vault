@@ -50,6 +50,11 @@ func (h *FileHandler) UploadFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	visibility := r.FormValue("visibility")
+	if visibility != models.VisibilityPublic && visibility != models.VisibilityPrivate {
+		visibility = models.VisibilityPrivate // Default to private
+	}
+
 	if err := os.MkdirAll(uploadPath, os.ModePerm); err != nil {
 		log.Printf("ERROR: Could not create upload directory: %v", err)
 		utils.WriteJSON(w, http.StatusInternalServerError, utils.ErrorResponse("Could not process upload"))
@@ -64,7 +69,7 @@ func (h *FileHandler) UploadFiles(w http.ResponseWriter, r *http.Request) {
 
 	var responses []models.FileUploadResponse
 	for _, fileHeader := range files {
-		resp, err := h.processSingleFile(r, userID, fileHeader)
+		resp, err := h.processSingleFile(r, userID, fileHeader, visibility)
 		if err != nil {
 			utils.WriteJSON(w, http.StatusInternalServerError, utils.ErrorResponse(err.Error()))
 			return
@@ -76,7 +81,7 @@ func (h *FileHandler) UploadFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 // processSingleFile contains the logic for hashing, storing, and creating DB records for one file.
-func (h *FileHandler) processSingleFile(r *http.Request, userID string, fileHeader *multipart.FileHeader) (*models.FileUploadResponse, error) {
+func (h *FileHandler) processSingleFile(r *http.Request, userID string, fileHeader *multipart.FileHeader, visibility string) (*models.FileUploadResponse, error) {
 	file, err := fileHeader.Open()
 	if err != nil {
 		return nil, fmt.Errorf("could not open uploaded file '%s'", fileHeader.Filename)
@@ -121,8 +126,9 @@ func (h *FileHandler) processSingleFile(r *http.Request, userID string, fileHead
 		StoragePath: permanentPath,
 	}
 	logicalFile := &models.LogicalFile{
-		OwnerID:  userID,
-		FileName: fileHeader.Filename,
+		OwnerID:    userID,
+		FileName:   fileHeader.Filename,
+		Visibility: visibility,
 	}
 
 	createdLogicalFile, isDuplicate, err := h.fileStore.ProcessUpload(r.Context(), logicalFile, physicalFile)
@@ -147,5 +153,40 @@ func (h *FileHandler) processSingleFile(r *http.Request, userID string, fileHead
 		Message:       message,
 		LogicalFileID: createdLogicalFile.ID,
 	}
+
+	if createdLogicalFile.Visibility == models.VisibilityPublic {
+		// This function already sets visibility and creates a token
+		token, err := h.fileStore.SetFileVisibilityPublic(r.Context(), createdLogicalFile.ID)
+		if err != nil {
+			// Don't fail the whole upload, just log a warning
+			log.Printf("WARN: Could not set file %s to public: %v", createdLogicalFile.ID, err)
+		} else {
+			response.PublicLink = "http://" + r.Host + "/api/public/file/" + token
+			response.Message += " (publicly shared)"
+		}
+	}
 	return response, nil
+}
+
+func (h *FileHandler) GetMyFiles(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(auth.UserIDKey).(string)
+	if !ok {
+		utils.WriteJSON(w, http.StatusUnauthorized, utils.ErrorResponse("Invalid user context"))
+		return
+	}
+
+	// You will need to create this 'GetFilesByUserID' function in your store
+	files, err := h.fileStore.GetFilesByUserID(r.Context(), userID)
+	if err != nil {
+		log.Printf("ERROR: Failed to get files for user %s: %v", userID, err)
+		utils.WriteJSON(w, http.StatusInternalServerError, utils.ErrorResponse("Could not retrieve files"))
+		return
+	}
+
+	// Return an empty array instead of null if no files are found
+	if files == nil {
+		files = []models.FileMetadata{} // Assumes your response model is FileMetadata
+	}
+
+	utils.WriteJSON(w, http.StatusOK, files)
 }

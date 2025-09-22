@@ -7,7 +7,6 @@ import { UploadProgressModal } from "@/components/upload/upload-progress-modal"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Upload,
@@ -17,9 +16,20 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
+  Lock,
+  Globe
 } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 
 /**
  * Upload configuration constants
@@ -54,6 +64,7 @@ export default function UploadPage() {
   const [showProgressModal, setShowProgressModal] = React.useState(false)
   const [uploadError, setUploadError] = React.useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = React.useState<string | null>(null)
+  const [visibility, setVisibility] = React.useState<string>("private")
 
   // Auth check effect
   React.useEffect(() => {
@@ -90,8 +101,9 @@ export default function UploadPage() {
     setUploadError(null)
     setUploadSuccess(null)
     setShowProgressModal(true)
-    startUpload()
-  }, [files.length, startUpload])
+    //startUpload()
+    startUpload({ visibility })
+  }, [files.length, startUpload, visibility])
 
   /**
    * Handle progress modal close
@@ -149,9 +161,7 @@ export default function UploadPage() {
   }
 
   // NOTE: This assumes your `user` object from `useAuth`
-  // has `name`, `email`, and `role`. If not, you may need
-  // to fetch stats like you do on the DashboardPage or
-  // update your /api/me endpoint and AuthContext.
+  // has `name`, `email`, and `role`.
   const layoutUser = {
     name: user.username || "User",
     email: user.email || "",
@@ -263,6 +273,33 @@ export default function UploadPage() {
                   <CardTitle className="text-lg">Upload Summary</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="visibility">Visibility</Label>
+                    <Select value={visibility} onValueChange={setVisibility} disabled={isUploading}>
+                      <SelectTrigger id="visibility" className="w-full">
+                        <SelectValue placeholder="Select visibility" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="private">
+                          <div className="flex items-center gap-2">
+                            <Lock className="h-4 w-4" />
+                            <span>Private</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="public">
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-4 w-4" />
+                            <span>Public</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {visibility === "private"
+                        ? "Only you can see these files."
+                        : "Anyone with the link can see these files."}
+                    </p>
+                  </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Files</span>

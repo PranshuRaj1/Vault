@@ -196,7 +196,7 @@ export function FileCard({
                 <div className="min-w-0 flex-1">
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <h3 className="font-medium text-sm truncate">{file.name}</h3>
+                      <h3 className="font-medium text-sm truncate">{file.name || "Untitled"}</h3>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>{file.name}</p>
@@ -205,7 +205,7 @@ export function FileCard({
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
                     <span className="text-xs text-muted-foreground">•</span>
-                    <span className="text-xs text-muted-foreground">{file.extension.toUpperCase()}</span>
+                    <span className="text-xs text-muted-foreground">{(file.extension.string || "Untitled").toUpperCase()}</span>
                   </div>
                 </div>
               </div>
@@ -310,7 +310,7 @@ export function FileCard({
                 </Badge>
               )}
 
-              {file.tags.length > 0 && (
+              {(file.tags || []).length > 0 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Badge variant="outline" className="text-xs">
@@ -331,13 +331,13 @@ export function FileCard({
                 <Avatar className="h-4 w-4">
                   <AvatarImage src={`/placeholder_icon.png?height=16&width=16`} />
                   <AvatarFallback className="text-xs">
-                    {file.uploadedBy.name
+                    {file.name
                       .split(" ")
                       .map((n) => n[0])
                       .join("")}
                   </AvatarFallback>
                 </Avatar>
-                <span className="truncate">{file.isOwner ? "You" : file.uploadedBy.name}</span>
+                <span className="truncate">{file.isOwner ? "You" : file.name}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
