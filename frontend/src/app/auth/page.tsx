@@ -147,6 +147,9 @@ export default function AuthPage() {
       setIsLoading(true)
       setErrors({})
 
+      console.log("issignup" , isSignup);
+      
+
       try {
         if (isSignup) {
           // --- Call Register from context ---
