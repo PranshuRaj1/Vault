@@ -65,7 +65,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 1. Create a JWT for the new user
-	token, err := auth.CreateJWT(user.ID, user.Role)
+	createdUser, err := h.userStore.GetUserByEmail(user.Email)
+	if err != nil {
+		log.Printf("ERROR: Failed to fetch created user by email %s: %v", user.Email, err)
+		utils.WriteJSON(w, http.StatusInternalServerError, utils.ErrorResponse("Failed to complete registration"))
+		return
+	}
+
+	token, err := auth.CreateJWT(createdUser.ID, createdUser.Role)
 	if err != nil {
 		// Log the internal error, but send a generic success message
 		// The user was created, but login failed.
@@ -89,10 +96,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// 3. Send back a success response
 	utils.WriteJSON(w, http.StatusCreated, map[string]string{
 		"message":  "User registered successfully",
-		"username": user.Username,
-		"email":    user.Email,
-		"userID":   user.ID,
-		"userRole": user.Role,
+		"username": createdUser.Username,
+		"email":    createdUser.Email,
+		"userID":   createdUser.ID,
+		"userRole": createdUser.Role,
 	})
 
 }

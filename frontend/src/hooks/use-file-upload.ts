@@ -115,7 +115,11 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
    * Upload a single file with progress tracking
    */
   const uploadFile = React.useCallback(
+    
     async (fileId: string): Promise<void> => {
+
+      console.log("control is here");
+      
       const file = files.find((f) => f.id === fileId)
       if (!file || file.status === "uploading") return
 
@@ -142,9 +146,17 @@ export function useFileUpload(config: UseFileUploadConfig = {}) {
         })
 
         if (!response.ok) {
+          console.log("++++++++++++++++++++++++++++++++");
+          
           const data = await response.json()
           throw new Error(data.error || "Upload failed")
         }
+
+        console.log("--------------------------------------");
+        
+
+        console.log(response.json());
+        
 
  
         // Mark as completed

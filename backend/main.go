@@ -86,6 +86,8 @@ func main() {
 			// Route for user info
 			r.Get("/me", func(w http.ResponseWriter, r *http.Request) {
 				userID := r.Context().Value(auth.UserIDKey).(string)
+				log.Println("user id ")
+				log.Println(userID)
 				userRole := r.Context().Value(auth.UserRoleKey).(string)
 				w.Header().Set("Content-Type", "application/json")
 				fmt.Fprintf(w, `{"message": "This is a protected route", "userID": "%s", "userRole": "%s"}`, userID, userRole)
